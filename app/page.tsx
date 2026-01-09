@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/utils/supabase/client' // Import dari file yang baru kita buat
+import { createClient } from 'utils/supabase/client' // Import dari file yang baru kita buat
 
 export default function Home() {
   const [status, setStatus] = useState('Memeriksa koneksi...')
