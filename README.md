@@ -2,14 +2,11 @@
 
 Aplikasi manajemen restoran modern berbasis web yang mencakup sistem POS kasir, manajemen inventaris menu, dan buku menu digital interaktif (Flipbook) untuk pelanggan.
 
-
 ## 🎥 Video Demo
 
-Tonton demonstrasi lengkap penggunaan aplikasi di sini:
+Tonton demonstrasi lengkap penggunaan aplikasi melalui link berikut:
 
-[![Tonton Video Demo](https://drive.google.com/drive/folders/1CilND-4tjixdk4Mt-7K3cyz8wBntPaqh?usp=sharing)]
-
-*(Klik gambar di atas untuk memutar video)*
+👉 [Tonton Video Demo di Google Drive](https://drive.google.com/drive/folders/1CilND-4tjixdk4Mt-7K3cyz8wBntPaqh?usp=sharing)
 
 ## ✨ Fitur Unggulan
 
@@ -35,19 +32,23 @@ Tonton demonstrasi lengkap penggunaan aplikasi di sini:
 
 1.  Clone repository:
     ```bash
-    git clone [https://github.com/rizky2605/Foodhub.git]
+    git clone [https://github.com/rizky2605/Foodhub.git](https://github.com/rizky2605/Foodhub.git)
     ```
+
 2.  Install dependencies:
     ```bash
     npm install
     ```
+
 3.  Setup Environment Variables (`.env.local`):
+    Buat file `.env.local` dan isi dengan konfigurasi berikut:
     ```env
     NEXT_PUBLIC_SUPABASE_URL=your_url
     NEXT_PUBLIC_SUPABASE_ANON_KEY=your_key
-
-    kontak saya untuk kodenya
+    
+    # Silakan kontak saya untuk mendapatkan kode/kredensial lengkapnya
     ```
+
 4.  Jalankan server development:
     ```bash
     npm run dev
