@@ -39,18 +39,31 @@ export default function SignupPage() {
     setErrorMsg('')
 
     try {
-      // 1. Validasi Input
+      // 1. Validasi Input Dasar
       if (!email || !password || !fullName) throw new Error('Mohon lengkapi data akun.')
       if (password.length < 6) throw new Error('Password minimal 6 karakter.')
       if (password !== confirmPassword) throw new Error('Konfirmasi password tidak cocok.')
       
-      // Validasi Khusus Employee
+      let finalRestaurantId = ''
+
+      // 2. Validasi Khusus Employee (CEK ID RESTORAN DULU)
       if (userRole === 'employee') {
         if (!restaurantId) throw new Error('ID Restoran wajib diisi untuk karyawan.')
-        // Opsional: Cek format UUID jika perlu
+        finalRestaurantId = restaurantId.trim()
+
+        // Cek ke database: Apakah restoran ini ada?
+        const { data: restoCheck, error: restoCheckError } = await supabase
+          .from('restaurants')
+          .select('id, name')
+          .eq('id', finalRestaurantId)
+          .single()
+        
+        if (restoCheckError || !restoCheck) {
+          throw new Error('ID Restoran tidak ditemukan! Pastikan ID benar.')
+        }
       }
 
-      // 2. Buat Akun Auth Supabase
+      // 3. Buat Akun Auth Supabase
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -64,7 +77,8 @@ export default function SignupPage() {
 
       const userId = authData.user.id
 
-      // 3. Simpan ke Tabel Public 'users' (Agar nama bisa dibaca Owner nanti)
+      // 4. Simpan ke Tabel Public 'users'
+      // PERBAIKAN: Jika ini gagal, kita harus STOP (Throw Error)
       const { error: userError } = await supabase
         .from('users')
         .insert({
@@ -75,42 +89,39 @@ export default function SignupPage() {
         })
 
       if (userError) {
-        console.warn('User insert warning:', userError.message)
-        // Kita tidak throw error disini agar flow auth tetap lanjut jika user profile gagal (edge case)
+        // Jika user sudah ada (duplicate), kita abaikan. Tapi jika error lain, kita lempar.
+        if (!userError.message.includes('duplicate key')) {
+           throw new Error('Gagal membuat profil pengguna: ' + userError.message)
+        }
       }
 
-      // 4. Logic Cabang Role
+      // 5. Insert ke tabel employees (Hanya jika role Employee)
       if (userRole === 'employee') {
-        // Cek apakah ID Restoran valid sebelum insert (Opsional tapi disarankan)
-        const { data: restoCheck } = await supabase
-          .from('restaurants')
-          .select('id')
-          .eq('id', restaurantId)
-          .single()
-        
-        if (!restoCheck) throw new Error('ID Restoran tidak ditemukan. Pastikan kode benar.')
-
-        // Insert ke tabel employees
         const { error: empError } = await supabase
           .from('employees')
           .insert({
             user_id: userId,
-            restaurant_id: restaurantId,
+            restaurant_id: finalRestaurantId,
             role: employeeRole,
-            status: 'pending' // Default pending approval
+            status: 'pending'
           })
 
-        if (empError) throw new Error('Gagal mendaftar sebagai karyawan.')
+        if (empError) {
+            // Jika gagal insert employee, hapus user auth agar tidak nyangkut (Opsional, manual rollback)
+            // await supabase.auth.admin.deleteUser(userId) 
+            throw new Error('Gagal mendaftar karyawan: ' + empError.message)
+        }
       }
 
-      // 5. Sukses
-      setSuccessMsg('Akun berhasil dibuat! Mengalihkan...')
+      // 6. Sukses
+      setSuccessMsg('Akun berhasil dibuat! Silakan login.')
       
       setTimeout(() => {
-        router.push('/login') // Redirect ke Login agar user login ulang (Best Practice)
+        router.push('/login')
       }, 1500)
 
     } catch (err: any) {
+      console.error(err)
       setErrorMsg(err.message || 'Terjadi kesalahan sistem.')
     } finally {
       setLoading(false)
@@ -120,9 +131,8 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex bg-white font-sans">
       
-      {/* --- BAGIAN KIRI: ARTWORK & TESTIMONIAL --- */}
+      {/* --- BAGIAN KIRI: ARTWORK --- */}
       <div className="hidden lg:flex w-1/2 bg-slate-900 relative overflow-hidden flex-col justify-between p-12 text-white">
-        {/* Abstract Background */}
         <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600 rounded-full blur-[100px] opacity-20 translate-x-1/2 -translate-y-1/2"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-600 rounded-full blur-[100px] opacity-20 -translate-x-1/2 translate-y-1/2"></div>
@@ -160,7 +170,6 @@ export default function SignupPage() {
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 md:px-16 lg:px-24 py-12 overflow-y-auto">
         <div className="max-w-md w-full mx-auto">
           
-          {/* Mobile Header */}
           <div className="flex lg:hidden items-center gap-2 mb-8">
             <div className="bg-blue-600 p-2 rounded-lg text-white"><ChefHat size={20} /></div>
             <span className="text-xl font-bold text-gray-900">FoodHub</span>
@@ -187,7 +196,6 @@ export default function SignupPage() {
             </button>
           </div>
 
-          {/* Alerts */}
           {errorMsg && (
             <div className="mb-6 p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl flex items-start text-sm">
               <AlertCircle className="mr-2 mt-0.5 flex-shrink-0" size={16} />
@@ -203,8 +211,6 @@ export default function SignupPage() {
           )}
 
           <form onSubmit={handleRegister} className="space-y-4">
-            
-            {/* Nama Lengkap */}
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Nama Lengkap</label>
               <div className="relative">
@@ -218,7 +224,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Email */}
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Email</label>
               <div className="relative">
@@ -232,7 +237,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Password & Confirm */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Password</label>
