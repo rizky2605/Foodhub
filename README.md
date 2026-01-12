@@ -7,7 +7,7 @@ Aplikasi manajemen restoran modern berbasis web yang mencakup sistem POS kasir, 
 
 Tonton demonstrasi lengkap penggunaan aplikasi di sini:
 
-[![Tonton Video Demo](https://drive.google.com/drive/folders/1CilND-4tjixdk4Mt-7K3cyz8wBntPaqh?usp=sharing)
+[![Tonton Video Demo](https://drive.google.com/drive/folders/1CilND-4tjixdk4Mt-7K3cyz8wBntPaqh?usp=sharing)]
 
 *(Klik gambar di atas untuk memutar video)*
 
