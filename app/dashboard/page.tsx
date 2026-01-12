@@ -7,7 +7,7 @@ import {
   Store, Utensils, Users, Clock, 
   LogOut, ExternalLink, Settings, QrCode, 
   TrendingUp, BookOpen, ShoppingBag, 
-  ChevronRight, Copy, CheckCircle
+  ChevronRight, ArrowUpRight, CheckCircle, ChefHat, AlertCircle, XCircle
 } from 'lucide-react'
 
 export default function DashboardPage() {
@@ -20,51 +20,56 @@ export default function DashboardPage() {
   const [role, setRole] = useState<string>('') 
   const [loading, setLoading] = useState(true)
 
-  // State Statistik Hari Ini
-  const [todayRevenue, setTodayRevenue] = useState(0)
-  const [todayOrders, setTodayOrders] = useState(0)
-  
-  // State UI
+  // Statistik
+  const [stats, setStats] = useState({
+    todayRevenue: 0,
+    todayOrders: 0,
+    pendingOrders: 0
+  })
+
+  // Pesanan Terbaru (Live Feed)
+  const [recentOrders, setRecentOrders] = useState<any[]>([])
+
+  // Greeting
   const [greeting, setGreeting] = useState('')
 
   useEffect(() => {
-    // Set Greeting
     const hour = new Date().getHours()
-    if (hour < 12) setGreeting('Selamat Pagi')
+    if (hour < 11) setGreeting('Selamat Pagi')
     else if (hour < 15) setGreeting('Selamat Siang')
-    else if (hour < 18) setGreeting('Selamat Sore')
+    else if (hour < 19) setGreeting('Selamat Sore')
     else setGreeting('Selamat Malam')
 
     fetchDashboardData()
+
+    // Setup Realtime Subscription untuk update pesanan otomatis
+    const channel = supabase.channel('dashboard_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchDashboardData() // Refresh data jika ada order baru/update
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   const fetchDashboardData = async () => {
     try {
-      // 1. User & Role
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.replace('/login')
-        return
-      }
+      if (!user) { router.replace('/login'); return }
       setUser(user)
 
-      // 2. Cek Restaurant (Owner vs Employee)
+      // 1. Cek Restaurant & Role
       let restoData = null
       let userRole = ''
-
-      // Cek Owner
-      const { data: ownerResto } = await supabase.from('restaurants').select('*').eq('user_id', user.id).single()
       
+      const { data: ownerResto } = await supabase.from('restaurants').select('*').eq('user_id', user.id).single()
       if (ownerResto) {
-        restoData = ownerResto
-        userRole = 'owner'
+        restoData = ownerResto; userRole = 'owner'
       } else {
-        // Cek Employee
         const { data: emp } = await supabase.from('employees').select('*, restaurants(*)').eq('user_id', user.id).eq('status', 'approved').single()
         if (emp && emp.restaurants) {
           // @ts-ignore
-          restoData = emp.restaurants
-          userRole = emp.role
+          restoData = emp.restaurants; userRole = emp.role
         }
       }
 
@@ -72,26 +77,39 @@ export default function DashboardPage() {
         setRestaurant(restoData)
         setRole(userRole)
 
-        // 3. Hitung Statistik Harian (Hanya order hari ini)
+        // 2. Hitung Statistik Hari Ini
         const today = new Date().toISOString().split('T')[0]
-        const { data: orders } = await supabase
+        const { data: todayData } = await supabase
           .from('orders')
           .select('total_amount, status')
           .eq('restaurant_id', restoData.id)
           .gte('created_at', `${today}T00:00:00`)
-          .lte('created_at', `${today}T23:59:59`)
-          .neq('status', 'cancelled') // Jangan hitung yang batal
+          .neq('status', 'cancelled')
 
-        if (orders) {
-          const revenue = orders
-            .filter(o => o.status === 'completed') // Omset hanya dari yang completed
+        if (todayData) {
+          const revenue = todayData
+            .filter(o => o.status === 'completed')
             .reduce((acc, curr) => acc + curr.total_amount, 0)
           
-          setTodayRevenue(revenue)
-          setTodayOrders(orders.length)
-        }
-      }
+          const pending = todayData.filter(o => o.status === 'pending').length
 
+          setStats({
+            todayRevenue: revenue,
+            todayOrders: todayData.length,
+            pendingOrders: pending
+          })
+        }
+
+        // 3. Ambil 5 Pesanan Terakhir (Recent Activity)
+        const { data: recent } = await supabase
+          .from('orders')
+          .select('id, customer_name, total_amount, status, created_at, table_no')
+          .eq('restaurant_id', restoData.id)
+          .order('created_at', { ascending: false })
+          .limit(5)
+        
+        if (recent) setRecentOrders(recent)
+      }
     } catch (error) {
       console.error(error)
     } finally {
@@ -104,227 +122,295 @@ export default function DashboardPage() {
     router.replace('/login')
   }
 
-  const copyLink = () => {
-    if (!restaurant) return
-    const url = `${window.location.origin}/restaurant/${restaurant.slug}`
-    navigator.clipboard.writeText(url)
-    alert('Link restoran disalin!')
+  const toggleStoreStatus = async () => {
+    if (role !== 'owner') return alert('Hanya owner yang bisa mengubah status toko.')
+    
+    const newStatus = !restaurant.is_open
+    // Optimistic Update
+    setRestaurant({ ...restaurant, is_open: newStatus })
+    
+    await supabase.from('restaurants').update({ is_open: newStatus }).eq('id', restaurant.id)
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-500 font-medium text-sm">Memuat Dashboard...</p>
-        </div>
+  if (loading) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="animate-pulse flex flex-col items-center">
+        <div className="h-12 w-12 bg-slate-200 rounded-full mb-4"></div>
+        <div className="h-4 w-32 bg-slate-200 rounded"></div>
       </div>
-    )
-  }
+    </div>
+  )
 
-  // TAMPILAN JIKA BELUM PUNYA RESTORAN (OWNER BARU)
   if (!restaurant && role !== 'kasir' && role !== 'pelayan') {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-        <div className="bg-white p-10 rounded-3xl shadow-xl max-w-lg text-center border border-gray-100">
-          <div className="w-24 h-24 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Store size={40} />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">Selamat Datang, Owner!</h2>
-          <p className="text-gray-500 mb-8 leading-relaxed">
-            Anda belum memiliki restoran. Mulailah perjalanan bisnis kuliner Anda dengan membuat profil restoran pertama Anda.
-          </p>
-          <button
-            onClick={() => router.push('/create-restaurant')}
-            className="w-full bg-blue-600 text-white px-6 py-4 rounded-xl hover:bg-blue-700 transition font-bold shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
-          >
-            <Store size={20} /> Buat Restoran Baru
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="text-center max-w-md">
+          <Store size={48} className="mx-auto text-slate-300 mb-4"/>
+          <h2 className="text-2xl font-bold text-slate-800">Belum ada Restoran</h2>
+          <p className="text-slate-500 mb-6">Buat profil restoran Anda untuk memulai.</p>
+          <button onClick={() => router.push('/create-restaurant')} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition">
+            Buat Restoran
           </button>
-          <button onClick={handleLogout} className="mt-6 text-gray-400 hover:text-red-500 text-sm">Keluar Akun</button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-12">
-      {/* --- TOP NAVBAR --- */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4 sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
+    <div className="min-h-screen bg-[#F1F5F9]">
+      
+      {/* --- HEADER --- */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-4 shadow-sm">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             {restaurant?.logo_url ? (
-              <img src={restaurant.logo_url} alt="Logo" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
+              <img src={restaurant.logo_url} alt="Logo" className="w-10 h-10 rounded-full object-cover border border-slate-200" />
             ) : (
-              <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+              <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-lg">
                 {restaurant?.name?.charAt(0)}
               </div>
             )}
             <div>
-              <h1 className="font-bold text-gray-900 leading-tight">{restaurant?.name}</h1>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className={`w-2 h-2 rounded-full ${restaurant?.is_open ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                {restaurant?.is_open ? 'Buka' : 'Tutup'}
-                <span className="text-gray-300">|</span>
-                <span className="capitalize">{role === 'owner' ? 'Pemilik' : role}</span>
+              <h1 className="font-bold text-slate-800 leading-tight">{restaurant?.name}</h1>
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                <span className={`w-2 h-2 rounded-full ${restaurant?.is_open ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+                {restaurant?.is_open ? 'Operational' : 'Closed'}
+                <span className="text-slate-300">|</span>
+                <span className="capitalize">{role === 'owner' ? 'Owner' : role}</span>
               </div>
             </div>
           </div>
-          <button onClick={handleLogout} className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-gray-50 transition">
-            <LogOut size={20} />
-          </button>
-        </div>
-      </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
+          <div className="flex items-center gap-4">
+            <button onClick={() => window.open(`/restaurant/${restaurant.slug}`, '_blank')} className="hidden md:flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-indigo-600 transition">
+              <ExternalLink size={16} /> <span className="hidden sm:inline">Lihat Web</span>
+            </button>
+            <div className="h-8 w-[1px] bg-slate-200 hidden md:block"></div>
+            <button onClick={handleLogout} className="text-slate-400 hover:text-red-600 transition p-2 hover:bg-red-50 rounded-full">
+              <LogOut size={20} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-6 py-8">
         
-        {/* --- GREETING & HEADER --- */}
+        {/* --- WELCOME & STORE TOGGLE --- */}
         <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
           <div>
-            <p className="text-gray-500 text-sm font-medium mb-1">{greeting}, {user?.email?.split('@')[0]}</p>
-            <h2 className="text-3xl font-bold text-gray-900">Ringkasan Hari Ini</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-800">{greeting}, {user?.user_metadata?.full_name || 'Admin'}</h2>
+            <p className="text-slate-500 mt-1">Berikut ringkasan performa restoran Anda hari ini.</p>
           </div>
-          <button onClick={copyLink} className="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-full text-sm font-medium hover:bg-gray-50 transition shadow-sm">
-            <ExternalLink size={14} /> Lihat Web Resto
-          </button>
-        </div>
-
-        {/* --- STATS CARDS --- */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          {/* Card 1: Revenue */}
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-200 relative overflow-hidden">
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 text-blue-100 text-sm font-medium mb-2">
-                <TrendingUp size={16} /> Omset Penjualan (Selesai)
-              </div>
-              <h3 className="text-3xl font-bold">Rp {todayRevenue.toLocaleString('id-ID')}</h3>
-              <p className="text-xs text-blue-200 mt-1">Total pendapatan hari ini</p>
-            </div>
-            <div className="absolute right-0 top-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
-          </div>
-
-          {/* Card 2: Orders */}
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-center">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-500 text-sm font-medium">Total Pesanan Masuk</span>
-              <div className="bg-orange-100 p-2 rounded-lg text-orange-600">
-                <ShoppingBag size={20} />
-              </div>
-            </div>
-            <h3 className="text-3xl font-bold text-gray-900">{todayOrders}</h3>
-            <p className="text-xs text-gray-400 mt-1">Transaksi hari ini (Semua Status)</p>
-          </div>
-
-          {/* Card 3: Status Toko */}
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-center">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-500 text-sm font-medium">Status Operasional</span>
-              <div className={`p-2 rounded-lg ${restaurant?.is_open ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {restaurant?.is_open ? <Clock size={20} /> : <LogOut size={20} />}
-              </div>
-            </div>
-            <h3 className={`text-xl font-bold ${restaurant?.is_open ? 'text-green-600' : 'text-red-600'}`}>
-              {restaurant?.is_open ? 'Sedang Buka' : 'Tutup Sementara'}
-            </h3>
-            <p className="text-xs text-gray-400 mt-1">
-              {role === 'owner' ? 'Ubah status di menu Pengaturan' : 'Hubungi Owner untuk mengubah'}
-            </p>
-          </div>
-        </div>
-
-        {/* --- MENU GRID --- */}
-        <h3 className="text-lg font-bold text-gray-800 mb-4">Menu Cepat</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           
-          {/* 1. PESANAN MASUK */}
-          <div 
-            onClick={() => router.push('/dashboard/orders')}
-            className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition group"
-          >
-            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-              <Clock size={24} />
-            </div>
-            <h4 className="font-bold text-gray-900">Pesanan Masuk</h4>
-            <p className="text-xs text-gray-500 mt-1">Cek pesanan realtime</p>
-          </div>
-
-          {/* 2. DAFTAR MENU (Input Harga) */}
-          <div 
-            onClick={() => router.push('/dashboard/menu')}
-            className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-orange-300 cursor-pointer transition group"
-          >
-            <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-              <Utensils size={24} />
-            </div>
-            <h4 className="font-bold text-gray-900">Daftar Harga Menu</h4>
-            <p className="text-xs text-gray-500 mt-1">Input nama & harga</p>
-          </div>
-
-          {/* 3. DESAIN BUKU MENU (Flipbook) */}
-          <div 
-            onClick={() => router.push('/dashboard/pages')}
-            className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-purple-300 cursor-pointer transition group"
-          >
-            <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-              <BookOpen size={24} />
-            </div>
-            <h4 className="font-bold text-gray-900">Desain Buku Menu</h4>
-            <p className="text-xs text-gray-500 mt-1">Upload gambar halaman</p>
-          </div>
-
-          {/* 4. LAPORAN */}
-          <div 
-            onClick={() => router.push('/dashboard/report')}
-            className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-green-300 cursor-pointer transition group"
-          >
-            <div className="w-12 h-12 bg-green-50 text-green-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-              <TrendingUp size={24} />
-            </div>
-            <h4 className="font-bold text-gray-900">Laporan</h4>
-            <p className="text-xs text-gray-500 mt-1">Lihat riwayat omset</p>
-          </div>
-
-          {/* 5. QR CODE */}
-          <div 
-            onClick={() => router.push('/dashboard/qr')}
-            className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-indigo-300 cursor-pointer transition group"
-          >
-            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-              <QrCode size={24} />
-            </div>
-            <h4 className="font-bold text-gray-900">QR Code</h4>
-            <p className="text-xs text-gray-500 mt-1">Cetak QR Meja</p>
-          </div>
-
-          {/* 6. PEGAWAI (Owner Only) */}
           {role === 'owner' && (
-            <div 
-              onClick={() => router.push('/dashboard/employees')}
-              className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-300 cursor-pointer transition group"
-            >
-              <div className="w-12 h-12 bg-pink-50 text-pink-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-                <Users size={24} />
-              </div>
-              <h4 className="font-bold text-gray-900">Pegawai</h4>
-              <p className="text-xs text-gray-500 mt-1">Kelola staf restoran</p>
+            <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+              <span className="text-sm font-medium text-slate-600 pl-2">Status Toko:</span>
+              <button 
+                onClick={toggleStoreStatus}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 ${
+                  restaurant.is_open 
+                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
+                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+                }`}
+              >
+                {restaurant.is_open ? <CheckCircle size={16}/> : <LogOut size={16}/>}
+                {restaurant.is_open ? 'BUKA' : 'TUTUP'}
+              </button>
             </div>
           )}
+        </div>
 
-          {/* 7. PENGATURAN (Owner Only) */}
-          {role === 'owner' && (
-            <div 
-              onClick={() => router.push('/dashboard/settings')}
-              className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-gray-400 cursor-pointer transition group"
-            >
-              <div className="w-12 h-12 bg-gray-100 text-gray-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-                <Settings size={24} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* --- LEFT COLUMN: STATS & LIVE FEED (2/3 Width) --- */}
+          <div className="lg:col-span-2 space-y-8">
+            
+            {/* 1. STATS CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Revenue */}
+              <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-2xl text-white shadow-lg shadow-indigo-200 relative overflow-hidden group">
+                <div className="relative z-10">
+                  <p className="text-indigo-100 text-sm font-medium mb-1">Omset Hari Ini</p>
+                  <h3 className="text-2xl font-bold">Rp {stats.todayRevenue.toLocaleString('id-ID')}</h3>
+                </div>
+                <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:scale-110 transition transform">
+                  <TrendingUp size={48} />
+                </div>
               </div>
-              <h4 className="font-bold text-gray-900">Pengaturan</h4>
-              <p className="text-xs text-gray-500 mt-1">Profil & Buka/Tutup</p>
+
+              {/* Total Orders */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                <div className="relative z-10">
+                  <p className="text-slate-500 text-sm font-medium mb-1">Total Pesanan</p>
+                  <h3 className="text-2xl font-bold text-slate-800">{stats.todayOrders} <span className="text-sm font-normal text-slate-400">trx</span></h3>
+                </div>
+                <div className="absolute right-0 top-0 p-4 text-slate-100 group-hover:text-slate-200 transition transform">
+                  <ShoppingBag size={48} />
+                </div>
+              </div>
+
+              {/* Pending Orders (Action Needed) */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                 {stats.pendingOrders > 0 && <span className="absolute top-3 right-3 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span></span>}
+                <div className="relative z-10">
+                  <p className="text-slate-500 text-sm font-medium mb-1">Perlu Diproses</p>
+                  <h3 className="text-2xl font-bold text-orange-600">{stats.pendingOrders} <span className="text-sm font-normal text-slate-400">pesanan</span></h3>
+                </div>
+                 <div className="absolute right-0 top-0 p-4 text-orange-50 group-hover:text-orange-100 transition transform">
+                  <Clock size={48} />
+                </div>
+              </div>
             </div>
-          )}
+
+            {/* 2. LIVE ORDER FEED */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  Aktivitas Pesanan Terbaru
+                </h3>
+                <button onClick={() => router.push('/dashboard/orders')} className="text-sm text-indigo-600 font-medium hover:underline flex items-center">
+                  Lihat Semua <ArrowUpRight size={14} className="ml-1"/>
+                </button>
+              </div>
+              
+              <div className="divide-y divide-slate-100">
+                {recentOrders.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400">Belum ada pesanan hari ini.</div>
+                ) : (
+                  recentOrders.map((order) => (
+                    <div key={order.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
+                          ${order.status === 'pending' ? 'bg-orange-100 text-orange-600' : 
+                            order.status === 'cooking' ? 'bg-blue-100 text-blue-600' :
+                            order.status === 'completed' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}
+                        `}>
+                          {order.table_no === '-' ? 'TA' : order.table_no}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{order.customer_name}</p>
+                          <p className="text-xs text-slate-500">{new Date(order.created_at).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})} • ID: {order.id.slice(0,6)}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-slate-700">Rp {order.total_amount.toLocaleString('id-ID')}</p>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full
+                          ${order.status === 'pending' ? 'bg-orange-50 text-orange-600' : 
+                            order.status === 'cooking' ? 'bg-blue-50 text-blue-600' :
+                            order.status === 'completed' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}
+                        `}>
+                          {order.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          {/* --- RIGHT COLUMN: QUICK ACTIONS MENU (1/3 Width) --- */}
+          <div className="space-y-6">
+            
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <h3 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wider text-opacity-70">Menu Manajemen</h3>
+              <div className="grid grid-cols-1 gap-3">
+                
+                <MenuButton 
+                  icon={<Clock size={20}/>} 
+                  label="Pesanan Masuk" 
+                  desc="Kelola status pesanan"
+                  color="text-blue-600" bg="bg-blue-50"
+                  onClick={() => router.push('/dashboard/orders')}
+                  badge={stats.pendingOrders > 0 ? stats.pendingOrders : undefined}
+                />
+                
+                <MenuButton 
+                  icon={<Utensils size={20}/>} 
+                  label="Daftar Menu" 
+                  desc="Harga & Stok"
+                  color="text-orange-600" bg="bg-orange-50"
+                  onClick={() => router.push('/dashboard/menu')}
+                />
+
+                 <MenuButton 
+                  icon={<BookOpen size={20}/>} 
+                  label="Desain Buku" 
+                  desc="Upload gambar menu"
+                  color="text-purple-600" bg="bg-purple-50"
+                  onClick={() => router.push('/dashboard/pages')}
+                />
+
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <h3 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wider text-opacity-70">Lainnya</h3>
+              <div className="grid grid-cols-1 gap-3">
+                
+                <MenuButton 
+                  icon={<TrendingUp size={20}/>} 
+                  label="Laporan" 
+                  color="text-emerald-600" bg="bg-emerald-50"
+                  onClick={() => router.push('/dashboard/report')}
+                />
+
+                <MenuButton 
+                  icon={<QrCode size={20}/>} 
+                  label="QR Code Meja" 
+                  color="text-slate-600" bg="bg-slate-100"
+                  onClick={() => router.push('/dashboard/qr')}
+                />
+
+                {role === 'owner' && (
+                  <>
+                    <MenuButton 
+                      icon={<Users size={20}/>} 
+                      label="Pegawai" 
+                      color="text-pink-600" bg="bg-pink-50"
+                      onClick={() => router.push('/dashboard/employees')}
+                    />
+                    <MenuButton 
+                      icon={<Settings size={20}/>} 
+                      label="Pengaturan" 
+                      color="text-gray-600" bg="bg-gray-100"
+                      onClick={() => router.push('/dashboard/settings')}
+                    />
+                  </>
+                )}
+
+              </div>
+            </div>
+
+          </div>
 
         </div>
-      </div>
+      </main>
     </div>
+  )
+}
+
+// Component Helper untuk Tombol Menu
+function MenuButton({icon, label, desc, color, bg, onClick, badge}: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className="flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 transition group w-full text-left border border-transparent hover:border-slate-100"
+    >
+      <div className={`w-10 h-10 ${bg} ${color} rounded-lg flex items-center justify-center shrink-0 group-hover:scale-110 transition`}>
+        {icon}
+      </div>
+      <div className="flex-1">
+        <h4 className="font-bold text-slate-800 text-sm flex items-center justify-between">
+          {label}
+          {badge && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{badge}</span>}
+        </h4>
+        {desc && <p className="text-xs text-slate-400">{desc}</p>}
+      </div>
+      <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500"/>
+    </button>
   )
 }

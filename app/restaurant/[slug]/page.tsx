@@ -87,9 +87,10 @@ export default function FlipbookMenuPage() {
   const getTotalPrice = () => cart.reduce((total, item) => total + (item.price * item.quantity), 0)
 
   // Payment Logic
-  const handleOpenPayment = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!customerName) return alert('Mohon isi nama Anda')
+  const handleOpenPayment = () => {
+    // Validasi di sini sebelum buka modal
+    if (!customerName.trim()) return alert('Mohon isi Nama Pemesan terlebih dahulu.')
+    
     setIsOrderSheetOpen(false) 
     setIsPaymentModalOpen(true)
   }
@@ -124,16 +125,14 @@ export default function FlipbookMenuPage() {
   if (pages.length === 0) return <div className="min-h-screen bg-[#F9F7F2] flex items-center justify-center text-[#4A3B32] font-serif">Buku menu belum tersedia.</div>
 
   return (
-    // Container Utama: fixed agar tidak ada scroll browser default, flex column untuk layout
     <div className="fixed inset-0 bg-[#F9F7F2] overflow-hidden flex flex-col font-sans">
       
-      {/* Background Texture (Halus) */}
+      {/* Background Texture */}
       <div className="absolute inset-0 opacity-40 bg-[url('https://www.transparenttextures.com/patterns/cream-paper.png')] pointer-events-none z-0"></div>
 
-      {/* --- HEADER CAFE (Glassmorphism) --- */}
+      {/* --- HEADER --- */}
       <header className="relative z-40 px-4 py-3 md:py-4 flex justify-between items-center bg-white/60 backdrop-blur-md border-b border-white/40 shadow-sm shrink-0">
         <div className="flex items-center gap-3">
-          {/* LOGO */}
           <div className="relative w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-[#CC8F4C] overflow-hidden shadow-md bg-white">
             {restaurant.logo_url ? (
                <Image src={restaurant.logo_url} alt="Logo" fill className="object-cover" />
@@ -141,98 +140,51 @@ export default function FlipbookMenuPage() {
                <div className="w-full h-full flex items-center justify-center text-[#4A3B32]"><Utensils size={20}/></div>
             )}
           </div>
-          
-          {/* NAMA & INFO */}
           <div className="flex flex-col">
-            <h1 className="font-serif font-bold text-[#4A3B32] text-lg md:text-xl leading-none tracking-wide">
-              {restaurant.name}
-            </h1>
+            <h1 className="font-serif font-bold text-[#4A3B32] text-lg md:text-xl leading-none tracking-wide">{restaurant.name}</h1>
             <div className="flex items-center gap-2 text-xs text-[#8c7b70] mt-1 font-medium">
               <span className="flex items-center"><MapPin size={10} className="mr-0.5"/> {restaurant.address?.slice(0, 20)}...</span>
               <span className="w-1 h-1 rounded-full bg-[#CC8F4C]"></span>
-              <span className={`flex items-center ${restaurant.is_open ? 'text-green-700' : 'text-red-600'}`}>
-                 {restaurant.is_open ? 'Buka' : 'Tutup'}
-              </span>
+              <span className={`flex items-center ${restaurant.is_open ? 'text-green-700' : 'text-red-600'}`}>{restaurant.is_open ? 'Buka' : 'Tutup'}</span>
             </div>
           </div>
         </div>
-
-        {/* INFO BUTTON (Optional) */}
         <button className="w-8 h-8 flex items-center justify-center rounded-full bg-[#e5e0d8]/50 text-[#4A3B32] hover:bg-[#CC8F4C] hover:text-white transition">
            <Info size={18} />
         </button>
       </header>
 
-      {/* --- MAIN CONTENT (FLIPBOOK VIEWER) --- */}
-      {/* flex-1 agar mengisi sisa ruang vertikal, overflow-hidden agar gambar tidak keluar */}
+      {/* --- FLIPBOOK MAIN --- */}
       <main className="flex-1 relative w-full flex items-center justify-center p-4 overflow-hidden pb-20">
-        
         <div className="relative w-full h-full max-w-2xl flex items-center justify-center perspective-container">
-          
-          {/* BOOK PAGES CONTAINER */}
-          {/* aspect-[3/4] menjaga rasio buku. max-h-full memastikan tidak melebihi tinggi layar */}
           <div className="relative w-full h-full max-h-full aspect-[3/4] preserve-3d transition-transform duration-500">
               {pages.map((page, index) => {
-                  // Logic Flip
                   let transformStyle = index < currentPageIdx ? 'rotateY(-180deg)' : 'rotateY(0deg)'
                   let zIndex = pages.length - index
-                  
                   return (
                       <div key={page.id} 
-                          // PERBAIKAN DI SINI: Hapus border, hapus bg-white, tambahkan drop-shadow
                           className="absolute inset-0 bg-transparent rounded-r-lg rounded-l-sm drop-shadow-2xl transition-transform duration-700 ease-[cubic-bezier(0.645,0.045,0.355,1)] origin-left overflow-hidden backface-hidden"
                           style={{ zIndex, transform: transformStyle }}>
-                          
-                          {/* Shadow Lipatan Kiri (Lebih halus) */}
                           <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-black/10 to-transparent z-10 pointer-events-none mix-blend-multiply"></div>
-                          
-                          {/* Gambar Menu */}
                           <div className="relative w-full h-full">
-                             <Image 
-                               src={page.image_url} 
-                               alt={`Page ${index + 1}`} 
-                               fill 
-                               // PERBAIKAN DI SINI: Gunakan object-contain agar gambar pas di layar
-                               className="object-contain" 
-                               priority={index <= 1} 
-                             />
+                             <Image src={page.image_url} alt={`Page ${index + 1}`} fill className="object-contain" priority={index <= 1} />
                           </div>
                       </div>
                   )
               })}
           </div>
-
-          {/* Navigation Arrows */}
           <div className="absolute bottom-0 md:bottom-auto md:top-1/2 md:-translate-y-1/2 w-full flex justify-between px-4 md:px-0 md:-mx-16 z-30 pointer-events-none">
-              <button onClick={prevPage} disabled={currentPageIdx===0} className="pointer-events-auto p-3 bg-white/80 backdrop-blur text-[#4A3B32] rounded-full shadow-lg disabled:opacity-0 hover:scale-110 transition active:scale-95">
-                <ChevronLeft size={24}/>
-              </button>
-              <button onClick={nextPage} disabled={currentPageIdx===pages.length-1} className="pointer-events-auto p-3 bg-white/80 backdrop-blur text-[#4A3B32] rounded-full shadow-lg disabled:opacity-0 hover:scale-110 transition active:scale-95">
-                <ChevronRight size={24}/>
-              </button>
+              <button onClick={prevPage} disabled={currentPageIdx===0} className="pointer-events-auto p-3 bg-white/80 backdrop-blur text-[#4A3B32] rounded-full shadow-lg disabled:opacity-0 hover:scale-110 transition active:scale-95"><ChevronLeft size={24}/></button>
+              <button onClick={nextPage} disabled={currentPageIdx===pages.length-1} className="pointer-events-auto p-3 bg-white/80 backdrop-blur text-[#4A3B32] rounded-full shadow-lg disabled:opacity-0 hover:scale-110 transition active:scale-95"><ChevronRight size={24}/></button>
           </div>
-
         </div>
       </main>
 
-      {/* --- BOTTOM FLOATING BAR --- */}
+      {/* --- FLOATING BUTTONS --- */}
       {restaurant.is_open && (
         <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3 items-end">
-          
-          {/* WA Button */}
-          <button 
-            onClick={handleWhatsApp}
-            className="flex items-center justify-center w-12 h-12 bg-[#25D366] text-white rounded-full shadow-lg hover:brightness-110 transition hover:scale-105 border-2 border-white"
-            title="Chat WhatsApp"
-          >
-            <MessageCircle size={24} />
-          </button>
-
-          {/* Order Button */}
-          <button 
-            onClick={() => setIsOrderSheetOpen(true)}
-            className="group flex items-center gap-3 bg-[#CC8F4C] text-white pl-4 pr-6 py-3 rounded-full shadow-xl hover:bg-[#b0783d] transition transform hover:scale-105 border-2 border-white"
-          >
+          <button onClick={handleWhatsApp} className="flex items-center justify-center w-12 h-12 bg-[#25D366] text-white rounded-full shadow-lg hover:brightness-110 transition hover:scale-105 border-2 border-white" title="Chat WhatsApp"><MessageCircle size={24} /></button>
+          <button onClick={() => setIsOrderSheetOpen(true)} className="group flex items-center gap-3 bg-[#CC8F4C] text-white pl-4 pr-6 py-3 rounded-full shadow-xl hover:bg-[#b0783d] transition transform hover:scale-105 border-2 border-white">
             <div className="bg-white/20 p-2 rounded-full"><ShoppingBag size={20} /></div>
             <div className="text-left leading-tight">
               <div className="font-bold text-sm tracking-wide">ORDER</div>
@@ -246,15 +198,14 @@ export default function FlipbookMenuPage() {
       {/* --- DRAWER ORDER SHEET --- */}
       {isOrderSheetOpen && (
         <div className="absolute inset-0 z-[60] flex flex-col justify-end bg-[#4A3B32]/30 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#F9F7F2] rounded-t-[2rem] h-[85vh] w-full max-w-lg mx-auto flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-in slide-in-from-bottom duration-300 border-t-4 border-[#CC8F4C]">
+          <div className="bg-[#F9F7F2] rounded-t-[2rem] h-[90vh] w-full max-w-lg mx-auto flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-in slide-in-from-bottom duration-300 border-t-4 border-[#CC8F4C]">
             
             {/* Drawer Header */}
-            <div className="px-6 pt-6 pb-2 bg-[#F9F7F2] rounded-t-[2rem] shadow-sm z-10">
+            <div className="px-6 pt-6 pb-2 bg-[#F9F7F2] rounded-t-[2rem] shadow-sm z-10 shrink-0">
               <div className="flex justify-between items-center mb-4">
                 <div><h3 className="font-serif font-bold text-xl text-[#4A3B32]">Daftar Menu</h3></div>
                 <button onClick={() => setIsOrderSheetOpen(false)} className="p-2 bg-[#e5e0d8] rounded-full hover:bg-[#d4cec5] text-[#4A3B32]"><X size={20} /></button>
               </div>
-              {/* Category Tabs */}
               <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                 <button onClick={() => setActiveCategoryFilter('all')} className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition ${activeCategoryFilter === 'all' ? 'bg-[#4A3B32] text-white shadow-md' : 'bg-white border border-[#e5e0d8] text-[#8c7b70]'}`}>Semua</button>
                 {categories.map(cat => (
@@ -294,17 +245,49 @@ export default function FlipbookMenuPage() {
               {filteredItems.length === 0 && <div className="text-center py-10 text-gray-400 text-sm">Tidak ada menu di kategori ini.</div>}
             </div>
 
-            {/* Footer Checkout */}
-            <div className="p-6 border-t border-[#e5e0d8] bg-white safe-area-bottom">
+            {/* Footer Checkout + INPUT NAMA */}
+            <div className="p-6 border-t border-[#e5e0d8] bg-white safe-area-bottom shrink-0">
               <div className="flex justify-between items-center mb-4 bg-[#F9F7F2] p-3 rounded-xl border border-[#e5e0d8]">
                 <span className="text-[#8c7b70] font-bold text-sm">Total Estimasi</span>
                 <span className="text-2xl font-bold text-[#4A3B32]">Rp {getTotalPrice().toLocaleString('id-ID')}</span>
               </div>
               
               {cart.length > 0 ? (
-                <button onClick={handleOpenPayment} className="w-full bg-[#4A3B32] text-[#F9F7F2] py-4 rounded-xl font-bold hover:bg-[#33281d] flex items-center justify-center shadow-lg transition active:scale-[0.98]">
-                   <CreditCard size={18} className="mr-2"/> LANJUT PEMBAYARAN
-                </button>
+                <div className="space-y-3 animate-in slide-in-from-bottom fade-in">
+                  
+                  {/* INPUT FIELDS (PINDAH KE SINI) */}
+                  <div className="grid grid-cols-2 gap-3">
+                     <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-[#8c7b70] uppercase ml-1">Nama Pemesan</label>
+                        <div className="relative">
+                          <User size={16} className="absolute left-3 top-3 text-[#CC8F4C]"/>
+                          <input 
+                            required 
+                            value={customerName} 
+                            onChange={e=>setCustomerName(e.target.value)} 
+                            className="w-full pl-9 py-2.5 border border-[#e5e0d8] rounded-xl bg-[#F9F7F2] text-[#4A3B32] text-sm focus:bg-white focus:ring-2 focus:ring-[#CC8F4C] outline-none"
+                            placeholder="Nama"
+                          />
+                        </div>
+                     </div>
+                     <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-[#8c7b70] uppercase ml-1">No. Meja</label>
+                        <div className="relative">
+                          <Hash size={16} className="absolute left-3 top-3 text-[#CC8F4C]"/>
+                          <input 
+                            value={tableNo} 
+                            onChange={e=>setTableNo(e.target.value)} 
+                            className="w-full pl-9 py-2.5 border border-[#e5e0d8] rounded-xl bg-[#F9F7F2] text-[#4A3B32] text-sm focus:bg-white focus:ring-2 focus:ring-[#CC8F4C] outline-none"
+                            placeholder="Nomor"
+                          />
+                        </div>
+                     </div>
+                  </div>
+
+                  <button onClick={handleOpenPayment} className="w-full bg-[#4A3B32] text-[#F9F7F2] py-4 rounded-xl font-bold hover:bg-[#33281d] flex items-center justify-center shadow-lg transition active:scale-[0.98]">
+                     <CreditCard size={18} className="mr-2"/> LANJUT PEMBAYARAN
+                  </button>
+                </div>
               ) : (
                 <div className="text-center text-sm text-[#8c7b70] py-2">Pilih menu di atas untuk memesan</div>
               )}
@@ -313,46 +296,30 @@ export default function FlipbookMenuPage() {
         </div>
       )}
 
-      {/* --- PAYMENT MODAL --- */}
+      {/* --- PAYMENT MODAL (CONFIRMATION ONLY) --- */}
       {isPaymentModalOpen && (
         <div className="absolute inset-0 z-[70] flex items-center justify-center bg-[#4A3B32]/80 backdrop-blur-md p-4 animate-in fade-in">
           <div className="bg-[#F9F7F2] rounded-[2rem] p-6 w-full max-w-sm text-center shadow-2xl relative border-4 border-white">
             <button onClick={() => setIsPaymentModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={24}/></button>
             
-            <h3 className="text-xl font-serif font-bold text-[#4A3B32] mb-1">Konfirmasi Pesanan</h3>
-            <p className="text-xs text-[#8c7b70] mb-6">Lengkapi data diri Anda</p>
+            <h3 className="text-xl font-serif font-bold text-[#4A3B32] mb-1">Scan QRIS</h3>
+            <p className="text-xs text-[#8c7b70] mb-6">Selesaikan pembayaran di kasir/scan</p>
 
-            <form onSubmit={(e) => { e.preventDefault(); handleConfirmPayment() }} className="space-y-4">
-               <div className="bg-white p-4 rounded-xl border border-[#e5e0d8] space-y-3 text-left">
-                  <div>
-                    <label className="text-xs font-bold text-[#8c7b70] ml-1">Nama Pemesan</label>
-                    <div className="flex items-center gap-2 border-b border-[#e5e0d8] pb-1 mt-1">
-                       <User size={16} className="text-[#CC8F4C]"/>
-                       <input required value={customerName} onChange={e=>setCustomerName(e.target.value)} className="w-full outline-none text-[#4A3B32] font-medium placeholder-gray-300" placeholder="Contoh: Budi" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-[#8c7b70] ml-1">Nomor Meja</label>
-                    <div className="flex items-center gap-2 border-b border-[#e5e0d8] pb-1 mt-1">
-                       <Hash size={16} className="text-[#CC8F4C]"/>
-                       <input value={tableNo} onChange={e=>setTableNo(e.target.value)} className="w-full outline-none text-[#4A3B32] font-medium placeholder-gray-300" placeholder="Contoh: 12" />
-                    </div>
-                  </div>
+            <div className="bg-white p-4 rounded-xl border border-[#e5e0d8] flex flex-col items-center">
+               <div className="w-full flex justify-between text-xs text-[#8c7b70] mb-2 border-b border-dashed pb-2">
+                  <span>A.n. {customerName}</span>
+                  <span>Meja {tableNo || '-'}</span>
                </div>
 
-               {/* QRIS Placeholder */}
-               <div className="bg-white p-4 rounded-xl border border-[#e5e0d8] flex flex-col items-center">
-                  <p className="text-xs font-bold text-[#4A3B32] mb-2">SCAN QRIS</p>
-                  <div className="w-40 h-40 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-                     <QrCode size={100} className="text-gray-400"/>
-                  </div>
-                  <div className="mt-3 text-lg font-bold text-[#4A3B32]">Rp {getTotalPrice().toLocaleString('id-ID')}</div>
+               <div className="w-40 h-40 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
+                  <QrCode size={100} className="text-gray-400"/>
                </div>
+               <div className="mt-3 text-lg font-bold text-[#4A3B32]">Rp {getTotalPrice().toLocaleString('id-ID')}</div>
+            </div>
 
-               <button disabled={isProcessing} className="w-full bg-[#CC8F4C] text-white py-4 rounded-xl font-bold hover:bg-[#b0783d] flex items-center justify-center shadow-lg">
-                 {isProcessing ? <Loader2 className="animate-spin mr-2"/> : "SAYA SUDAH BAYAR"}
-               </button>
-            </form>
+            <button onClick={handleConfirmPayment} disabled={isProcessing} className="w-full bg-[#CC8F4C] text-white py-4 rounded-xl font-bold hover:bg-[#b0783d] flex items-center justify-center shadow-lg mt-6">
+              {isProcessing ? <Loader2 className="animate-spin mr-2"/> : "SAYA SUDAH BAYAR"}
+            </button>
           </div>
         </div>
       )}
