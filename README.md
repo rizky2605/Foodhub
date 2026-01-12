@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🍽️ FoodHub - Sistem Manajemen Restoran & Menu Digital
 
-## Getting Started
+Aplikasi manajemen restoran modern berbasis web yang mencakup sistem POS kasir, manajemen inventaris menu, dan buku menu digital interaktif (Flipbook) untuk pelanggan.
 
-First, run the development server:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🎥 Video Demo
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Tonton demonstrasi lengkap penggunaan aplikasi di sini:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+[![Tonton Video Demo](https://drive.google.com/drive/folders/1CilND-4tjixdk4Mt-7K3cyz8wBntPaqh?usp=sharing)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+*(Klik gambar di atas untuk memutar video)*
 
-## Learn More
+## ✨ Fitur Unggulan
 
-To learn more about Next.js, take a look at the following resources:
+### 📱 Untuk Pelanggan (Client Side)
+* **Interactive Flipbook Menu:** Pengalaman membuka menu seperti buku fisik dengan animasi 3D.
+* **Order System:** Pemesanan langsung dari meja dengan input nama & nomor meja.
+* **QRIS Payment:** Integrasi pembayaran digital.
+* **Digital Receipt:** Struk belanja yang bisa dicetak langsung dari browser.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 🛡️ Untuk Pemilik & Staf (Dashboard)
+* **Multi-Role Access:** Login berbeda untuk Owner, Admin, Kasir, dan Pelayan.
+* **Realtime Dashboard:** Memantau omset, total pesanan, dan item terlaris secara langsung.
+* **Manajemen Pegawai:** Owner dapat menyetujui (Approve) atau menolak pendaftaran staf baru.
+* **Laporan Penjualan:** Grafik penjualan dan ekspor laporan.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🛠️ Teknologi yang Digunakan
 
-## Deploy on Vercel
+* **Frontend:** Next.js 14 (App Router), Tailwind CSS, Lucide Icons.
+* **Backend & Database:** Supabase (PostgreSQL, Auth, Realtime, Storage).
+* **Deployment:** Vercel.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🚀 Cara Menjalankan Project
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1.  Clone repository:
+    ```bash
+    git clone [https://github.com/rizky2605/Foodhub.git]
+    ```
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
+3.  Setup Environment Variables (`.env.local`):
+    ```env
+    NEXT_PUBLIC_SUPABASE_URL=your_url
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_key
+
+    kontak saya untuk kodenya
+    ```
+4.  Jalankan server development:
+    ```bash
+    npm run dev
+    ```
+
+---
+Dibuat dengan ❤️ oleh Rizky Maulana
